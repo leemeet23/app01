@@ -1,24 +1,11 @@
 import streamlit as st
 from openai import OpenAI
 
-# ==========================================
-# [설정 영역] 여기에 OpenAI API 키를 직접 입력하세요
-# ==========================================
-OPENAI_API_KEY = "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"
-# ==========================================
-
 # 페이지 기본 설정
 st.set_page_config(page_title="AI 음성 상담소", page_icon="🎙️", layout="centered")
 
 st.title("🎙️ AI 음성 기초 상담소")
 st.caption("마이크로 고민을 말씀하시면 AI가 음성을 인식하고 따뜻한 기초 상담을 진행해 드립니다.")
-
-# API 키 유효성 체크
-if not OPENAI_API_KEY or "여기에_OPENAI" in OPENAI_API_KEY:
-    st.warning("⚠️ 코드 상단의 `OPENAI_API_KEY` 변수에 실제 OpenAI API 키를 입력해 주세요.")
-    st.stop()
-
-client = OpenAI(api_key=OPENAI_API_KEY)
 
 # 세션 상태 초기화 (대화 기록 및 중복 처리 방지용)
 if "messages" not in st.session_state:
@@ -36,14 +23,31 @@ if "messages" not in st.session_state:
 if "last_audio_bytes" not in st.session_state:
     st.session_state.last_audio_bytes = None
 
-# 사이드바: 상담 초기화 버튼
+# 왼쪽 사이드바: API 키 입력 및 상담 관리
 with st.sidebar:
-    st.header("⚙️ 상담 관리")
+    st.header("⚙️ 설정")
+    api_key = st.text_input(
+        "🔑 OpenAI API Key 입력",
+        type="password",
+        placeholder="sk-...",
+        help="OpenAI 플랫폼에서 발급받은 API 키를 입력하세요. 입력한 키는 저장되지 않습니다."
+    )
+
+    st.divider()
+
     if st.button("🗑️ 상담 기록 초기화", use_container_width=True):
         st.session_state.messages = [st.session_state.messages[0]]
         st.session_state.last_audio_bytes = None
         st.rerun()
-    st.info("마이크 아이콘을 눌러 녹음을 시작하고, 정지 버튼을 누르면 자동으로 음성을 분석해 상담을 시작합니다.")
+
+    st.info("1. 위 입력창에 OpenAI API 키를 입력하세요.\n2. 마이크 버튼을 눌러 고민을 말씀하시고 정지 버튼을 누르면 AI 상담이 시작됩니다.")
+
+# API 키 입력 여부 확인
+if not api_key:
+    st.warning("👈 왼쪽 사이드바에 OpenAI API 키를 입력해 주세요.")
+    st.stop()
+
+client = OpenAI(api_key=api_key.strip())
 
 # 기존 상담 대화 내역 출력 (system 메시지 제외)
 for msg in st.session_state.messages:
@@ -57,7 +61,7 @@ audio_value = st.audio_input("🎤 마이크 버튼을 눌러 고민을 말씀�
 if audio_value is not None:
     audio_bytes = audio_value.getvalue()
 
-    # 동일한 녹음 파일이 리런(rerun) 시 중복 처리되지 않도록 방지
+    # 동일한 녹음 파일이 중복 처리되지 않도록 방지
     if audio_bytes != st.session_state.last_audio_bytes:
         st.session_state.last_audio_bytes = audio_bytes
 
@@ -65,13 +69,13 @@ if audio_value is not None:
         with st.spinner("음성을 텍스트로 변환하고 있습니다..."):
             try:
                 transcription = client.audio.transcriptions.create(
-                    model="gpt-4o-mini-transcribe",  # 필요시 "whisper-1" 또는 "gpt-4o-transcribe"로 변경 가능
+                    model="gpt-4o-mini-transcribe",
                     file=audio_value,
                     language="ko"
                 )
                 user_text = transcription.text.strip()
             except Exception as e:
-                st.error(f"음성 인식 중 오류가 발생했습니다: {e}")
+                st.error(f"음성 인식 중 오류가 발생했습니다 (API 키를 확인해 주세요): {e}")
                 st.stop()
 
         if not user_text:
